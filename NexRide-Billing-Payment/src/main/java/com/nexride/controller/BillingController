@@ -1,0 +1,87 @@
+package com.nexride.controller;
+
+import com.nexride.model.User;
+import com.nexride.service.*;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api")
+public class BillingController {
+
+    private final UserService users;
+    private final BillingService billing;
+    private final OnlinePaymentService online;
+
+    public BillingController(
+            UserService users,
+            BillingService billing,
+            OnlinePaymentService online) {
+
+        this.users = users;
+        this.billing = billing;
+        this.online = online;
+    }
+
+    private User require(HttpServletRequest req) {
+        Object id = req.getSession(false) == null
+                ? null
+                : req.getSession(false).getAttribute("userId");
+
+        if (id == null) {
+            throw ApiException.unauthorized();
+        }
+
+        return users.byId(id.toString());
+    }
+
+    public record Checkout(
+            String currency,
+            String address,
+            String city,
+            String country) {}
+
+    @GetMapping("/invoices")
+    public Object invoices(HttpServletRequest req) {
+        return billing.invoices(require(req));
+    }
+
+    @GetMapping("/payments")
+    public Object payments(HttpServletRequest req) {
+        return billing.payments(require(req));
+    }
+
+    @PostMapping("/invoices/{id}/cash")
+    public Object cash(
+            @PathVariable String id,
+            HttpServletRequest req) {
+
+        return billing.cash(require(req), id);
+    }
+
+    @PostMapping("/invoices/{id}/checkout")
+    public Object checkout(
+            @PathVariable String id,
+            @RequestBody Checkout c,
+            HttpServletRequest req) {
+
+        return online.checkout(
+                require(req),
+                id,
+                c.currency(),
+                c.address(),
+                c.city(),
+                c.country());
+    }
+
+    @PostMapping(
+            value = "/payments/payhere/notify",
+            consumes = org.springframework.http.MediaType.APPLICATION_FORM_URLENCODED_VALUE)
+    public Object notify(
+            @RequestParam java.util.Map<String, String> payload) {
+
+        online.notify(payload);
+
+        return java.util.Map.of("received", true);
+    }
+}

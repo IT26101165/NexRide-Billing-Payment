@@ -1,0 +1,56 @@
+package com.nexride.controller;
+
+import com.nexride.model.SiteSettings;
+import com.nexride.model.User;
+import com.nexride.service.*;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api")
+public class SettingsController {
+
+    private final UserService users;
+    private final SettingsService settings;
+    private final ExchangeRateService rates;
+
+    public SettingsController(
+            UserService users,
+            SettingsService settings,
+            ExchangeRateService rates) {
+
+        this.users = users;
+        this.settings = settings;
+        this.rates = rates;
+    }
+
+    private User require(HttpServletRequest req) {
+        Object id = req.getSession(false) == null
+                ? null
+                : req.getSession(false).getAttribute("userId");
+
+        if (id == null) {
+            throw ApiException.unauthorized();
+        }
+
+        return users.byId(id.toString());
+    }
+
+    @GetMapping("/settings")
+    public Object getSettings() {
+        return settings.get();
+    }
+
+    @PutMapping("/settings")
+    public Object saveSettings(
+            @RequestBody SiteSettings x,
+            HttpServletRequest req) {
+
+        return settings.save(require(req), x);
+    }
+
+    @PostMapping("/settings/exchange-rate")
+    public Object refreshRate(HttpServletRequest req) {
+        return rates.refresh(require(req));
+    }
+}
